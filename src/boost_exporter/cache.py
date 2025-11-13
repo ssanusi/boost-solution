@@ -2,11 +2,23 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
-from typing import Tuple
+from typing import Any, Tuple
+
+import attrs
 
 
+def validate_positive_int(instance: Any, attribute: attrs.Attribute, value: int) -> None:
+    """Validate that an integer value is positive (> 0)."""
+    if value <= 0:
+        raise ValueError(f"{attribute.name} must be positive, got {value}")
+
+
+@attrs.define(slots=True, repr=True, eq=False)  # eq=False since cache has mutable state
 class ExportCache:
     """In-memory cache with a TTL (default: 1 hour) and LRU eviction.
+
+    This class uses attrs to eliminate boilerplate while maintaining mutable state
+    for the internal cache store. attrs generates __init__ and __repr__ automatically.
 
     Stores export results keyed by a hash of the input data and format.
     Implements LRU eviction when max_size is reached to prevent unbounded memory growth.
@@ -16,16 +28,21 @@ class ExportCache:
         external synchronization (e.g., locks) must be used when accessing the cache.
     """
 
-    def __init__(self, ttl_seconds: int = 3600, max_size: int = 1000) -> None:
-        """Initialize cache with TTL and size limit.
-
-        Args:
-            ttl_seconds: Time-to-live in seconds (default: 3600 = 1 hour).
-            max_size: Maximum number of entries before LRU eviction (default: 1000).
-        """
-        self._store: OrderedDict[str, Tuple[float, str]] = OrderedDict()
-        self.ttl_seconds = ttl_seconds
-        self.max_size = max_size
+    ttl_seconds: int = attrs.field(
+        default=3600,
+        validator=validate_positive_int,
+        metadata={"description": "Time-to-live in seconds"},
+    )
+    max_size: int = attrs.field(
+        default=1000,
+        validator=validate_positive_int,
+        metadata={"description": "Maximum number of cache entries before LRU eviction"},
+    )
+    _store: OrderedDict[str, Tuple[float, str]] = attrs.field(
+        init=False,
+        factory=OrderedDict,
+        metadata={"description": "Internal cache storage"},
+    )
 
     def get(self, key: str) -> str | None:
         """Get a cached export if present and not expired.

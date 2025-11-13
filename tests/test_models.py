@@ -232,3 +232,241 @@ def test_exporter_without_validation_backward_compatible() -> None:
     assert result is not None
     assert "any" in result
 
+
+# Tests for enhanced attrs features: converters and custom validators
+
+def test_converter_string_to_numeric() -> None:
+    """Test that string numeric values are automatically converted."""
+    # String quantity should be converted to int
+    record = ExportRecord(
+        event_type="Receive",
+        location_name="Warehouse",
+        sku_name="Product ABC",
+        quantity="10",  # String converted to int
+        value="1000.50",  # String converted to float
+        created_at=datetime(2024, 1, 15, 10, 30, 0)
+    )
+
+    assert isinstance(record.quantity, int)
+    assert record.quantity == 10
+    assert isinstance(record.value, float)
+    assert record.value == 1000.50
+
+
+def test_converter_string_to_datetime() -> None:
+    """Test that string datetime values are automatically converted."""
+    record = ExportRecord.from_dict({
+        "event_type": "Receive",
+        "location_name": "Warehouse",
+        "sku_name": "Product ABC",
+        "quantity": 10,
+        "value": 1000,
+        "created_at": "2024-01-15T10:30:00"  # String converted to datetime
+    })
+
+    assert isinstance(record.created_at, datetime)
+    assert record.created_at == datetime(2024, 1, 15, 10, 30, 0)
+
+
+def test_converter_from_dict_with_strings() -> None:
+    """Test from_dict with all string inputs (demonstrates converters)."""
+    record = ExportRecord.from_dict({
+        "event_type": "Ship",
+        "location_name": "Store",
+        "sku_name": "Product XYZ",
+        "quantity": "5",  # String -> int
+        "value": "500.75",  # String -> float
+        "created_at": "2024-01-16T14:00:00"  # String -> datetime
+    })
+
+    assert isinstance(record.quantity, int)
+    assert record.quantity == 5
+    assert isinstance(record.value, float)
+    assert record.value == 500.75
+    assert isinstance(record.created_at, datetime)
+
+
+def test_validator_positive_quantity() -> None:
+    """Test that quantity must be positive."""
+    # Valid positive quantity
+    record = ExportRecord(
+        event_type="Receive",
+        location_name="Warehouse",
+        sku_name="Product ABC",
+        quantity=1,  # Minimum positive
+        value=1000,
+        created_at=datetime(2024, 1, 15, 10, 30, 0)
+    )
+    assert record.quantity == 1
+
+    # Zero quantity should fail
+    with pytest.raises(ValueError, match="quantity must be positive"):
+        ExportRecord(
+            event_type="Receive",
+            location_name="Warehouse",
+            sku_name="Product ABC",
+            quantity=0,
+            value=1000,
+            created_at=datetime(2024, 1, 15, 10, 30, 0)
+        )
+
+    # Negative quantity should fail
+    with pytest.raises(ValueError, match="quantity must be positive"):
+        ExportRecord(
+            event_type="Receive",
+            location_name="Warehouse",
+            sku_name="Product ABC",
+            quantity=-1,
+            value=1000,
+            created_at=datetime(2024, 1, 15, 10, 30, 0)
+        )
+
+
+def test_validator_non_negative_value() -> None:
+    """Test that value must be non-negative."""
+    # Valid zero value
+    record = ExportRecord(
+        event_type="Receive",
+        location_name="Warehouse",
+        sku_name="Product ABC",
+        quantity=10,
+        value=0,  # Zero is allowed
+        created_at=datetime(2024, 1, 15, 10, 30, 0)
+    )
+    assert record.value == 0
+
+    # Negative value should fail
+    with pytest.raises(ValueError, match="value must be non-negative"):
+        ExportRecord(
+            event_type="Receive",
+            location_name="Warehouse",
+            sku_name="Product ABC",
+            quantity=10,
+            value=-100,
+            created_at=datetime(2024, 1, 15, 10, 30, 0)
+        )
+
+
+def test_validator_event_type() -> None:
+    """Test that event_type must be one of allowed values."""
+    allowed_types = ["Receive", "Ship", "Adjust", "Transfer", "Return"]
+
+    for event_type in allowed_types:
+        record = ExportRecord(
+            event_type=event_type,
+            location_name="Warehouse",
+            sku_name="Product ABC",
+            quantity=10,
+            value=1000,
+            created_at=datetime(2024, 1, 15, 10, 30, 0)
+        )
+        assert record.event_type == event_type
+
+    # Invalid event type should fail
+    with pytest.raises(ValueError, match="event_type must be one of"):
+        ExportRecord(
+            event_type="InvalidType",
+            location_name="Warehouse",
+            sku_name="Product ABC",
+            quantity=10,
+            value=1000,
+            created_at=datetime(2024, 1, 15, 10, 30, 0)
+        )
+
+
+def test_converter_invalid_numeric_string() -> None:
+    """Test that invalid numeric strings raise appropriate errors."""
+    with pytest.raises(TypeError, match="Cannot convert"):
+        ExportRecord(
+            event_type="Receive",
+            location_name="Warehouse",
+            sku_name="Product ABC",
+            quantity="not-a-number",
+            value=1000,
+            created_at=datetime(2024, 1, 15, 10, 30, 0)
+        )
+
+
+def test_converter_invalid_datetime_string() -> None:
+    """Test that invalid datetime strings raise appropriate errors."""
+    with pytest.raises((ValueError, TypeError), match="Cannot parse datetime|Cannot convert"):
+        ExportRecord.from_dict({
+            "event_type": "Receive",
+            "location_name": "Warehouse",
+            "sku_name": "Product ABC",
+            "quantity": 10,
+            "value": 1000,
+            "created_at": "not-a-datetime"
+        })
+
+
+def test_metadata_access() -> None:
+    """Test that field metadata can be accessed."""
+    fields = attrs.fields(ExportRecord)
+
+    # Check that metadata exists on fields
+    event_type_field = next(f for f in fields if f.name == "event_type")
+    assert "description" in event_type_field.metadata
+    assert "allowed_values" in event_type_field.metadata
+
+    quantity_field = next(f for f in fields if f.name == "quantity")
+    assert "description" in quantity_field.metadata
+    assert "unit" in quantity_field.metadata
+    assert quantity_field.metadata["unit"] == "items"
+
+
+def test_equality_comparison() -> None:
+    """Test that ExportRecord instances can be compared for equality."""
+    record1 = ExportRecord(
+        event_type="Receive",
+        location_name="Warehouse",
+        sku_name="Product ABC",
+        quantity=10,
+        value=1000,
+        created_at=datetime(2024, 1, 15, 10, 30, 0)
+    )
+
+    record2 = ExportRecord(
+        event_type="Receive",
+        location_name="Warehouse",
+        sku_name="Product ABC",
+        quantity=10,
+        value=1000,
+        created_at=datetime(2024, 1, 15, 10, 30, 0)
+    )
+
+    # Same values should be equal (eq=True)
+    assert record1 == record2
+
+    # Different values should not be equal
+    record3 = ExportRecord(
+        event_type="Ship",  # Different event type
+        location_name="Warehouse",
+        sku_name="Product ABC",
+        quantity=10,
+        value=1000,
+        created_at=datetime(2024, 1, 15, 10, 30, 0)
+    )
+    assert record1 != record3
+
+
+def test_validate_and_convert_records_with_converters() -> None:
+    """Test validate_and_convert_records with string inputs (converters)."""
+    data = [
+        {
+            "event_type": "Receive",
+            "location_name": "Warehouse",
+            "sku_name": "Product ABC",
+            "quantity": "10",  # String will be converted
+            "value": "1000.50",  # String will be converted
+            "created_at": "2024-01-15T10:30:00"  # String will be converted
+        }
+    ]
+
+    records = validate_and_convert_records(data, strict=True)
+    assert len(records) == 1
+    assert isinstance(records[0], ExportRecord)
+    assert isinstance(records[0].quantity, int)
+    assert isinstance(records[0].value, float)
+    assert isinstance(records[0].created_at, datetime)
+

@@ -67,13 +67,23 @@ result = exporter.export(data, ExportFormat.JSON)
 
 ### Structured Data Validation (attrs)
 
-The solution includes optional structured data validation using `attrs`, which is commonly used in Boost codebases:
+The solution includes enhanced structured data validation using `attrs` with advanced features:
+
+**Key attrs Features Implemented:**
+- **Automatic Type Conversion**: String inputs are automatically converted to appropriate types
+- **Custom Validators**: Business logic validation (e.g., quantity must be positive, value must be non-negative)
+- **Field Metadata**: Documentation and processing hints stored in field metadata
+- **Immutability**: Frozen classes ensure data integrity
+- **Performance**: Slots-based classes for better memory efficiency
+- **Equality Comparison**: Built-in equality comparison for records
+
+**Usage Examples:**
 
 ```python
 from boost_exporter import DataExporter, ExportFormat, ExportRecord, validate_and_convert_records
 from datetime import datetime
 
-# Option 1: Use structured ExportRecord models
+# Option 1: Use structured ExportRecord models with native types
 records = [
     ExportRecord(
         event_type="Receive",
@@ -85,21 +95,38 @@ records = [
     )
 ]
 
-# Convert to dicts for export
-data = [r.to_dict() for r in records]
-exporter = DataExporter()
-result = exporter.export(data, ExportFormat.JSON)
+# Option 2: Automatic type conversion from strings (converters)
+record = ExportRecord.from_dict({
+    "event_type": "Ship",
+    "location_name": "Store",
+    "sku_name": "Product XYZ",
+    "quantity": "5",  # String automatically converted to int
+    "value": "500.50",  # String automatically converted to float
+    "created_at": "2024-01-15T10:30:00"  # String automatically converted to datetime
+})
 
-# Option 2: Enable validation in exporter
+# Option 3: Enable validation in exporter
 exporter = DataExporter(validate_input=True)
 # This will validate data structure matches ExportRecord schema
 result = exporter.export(data, ExportFormat.JSON)
 
-# Option 3: Use validate_and_convert_records for conversion/validation
+# Option 4: Use validate_and_convert_records for conversion/validation
 validated_data = validate_and_convert_records(raw_data, strict=False)
 # Or convert to ExportRecord objects
 records = validate_and_convert_records(raw_data, strict=True)
 ```
+
+**Validation Rules:**
+- `event_type`: Must be one of: "Receive", "Ship", "Adjust", "Transfer", "Return"
+- `quantity`: Must be positive (> 0)
+- `value`: Must be non-negative (>= 0)
+- `created_at`: Must be a datetime object or ISO format string
+
+**Advanced Features:**
+- **Converters**: Automatically convert string numbers to int/float, string datetimes to datetime objects
+- **Custom Validators**: Enforce business rules (positive quantities, valid event types)
+- **Metadata**: Access field descriptions and units via `attrs.fields(ExportRecord)`
+- **Equality**: Records with same values are equal (`==` comparison works)
 
 ## Design Notes
 
@@ -129,8 +156,11 @@ records = validate_and_convert_records(raw_data, strict=True)
 - Full type hints throughout using modern Python 3.9+ syntax (`list[dict[str, Any]]`)
 - Input validation ensures data is a list of dictionaries
 - Clear error messages for invalid inputs
-- **Optional structured validation**: Uses `attrs` for runtime validation and data transformation (Boost's preferred approach)
-  - `ExportRecord` class provides immutable, validated data models
+- **Enhanced structured validation**: Uses `attrs` with advanced features (Boost's preferred approach)
+  - `ExportRecord` class provides immutable, validated data models with automatic type conversion
+  - Custom validators enforce business rules (positive quantities, valid event types)
+  - Converters automatically handle string-to-type conversion for flexible input
+  - Field metadata provides documentation and processing hints
   - `validate_and_convert_records()` function for structured validation/conversion
   - Can be enabled via `DataExporter(validate_input=True)` for automatic validation
 

@@ -7,13 +7,24 @@ import json
 from datetime import date, datetime, time
 from typing import Any
 
+import attrs
+
 from .cache import ExportCache
 from .formats import ExportFormat
 from .models import validate_and_convert_records
 
 
+def create_default_cache() -> ExportCache:
+    """Factory function to create a default ExportCache instance."""
+    return ExportCache()
+
+
+@attrs.define(slots=True, repr=True, eq=False)  # eq=False since cache is mutable
 class DataExporter:
     """Exports list-of-dicts datasets to multiple formats with caching.
+
+    This class uses attrs to eliminate boilerplate while maintaining mutable state
+    for the cache. attrs generates __init__ and __repr__ automatically.
 
     - Supports CSV and JSON.
     - Uses cache with 1-hour TTL by default (can be overridden in ExportCache).
@@ -25,23 +36,16 @@ class DataExporter:
         synchronization when sharing a DataExporter instance across threads.
     """
 
-    cache: ExportCache
-    validate_input: bool
-
-    def __init__(
-        self,
-        cache: ExportCache | None = None,
-        validate_input: bool = False
-    ) -> None:
-        """Initialize exporter with optional cache and validation.
-
-        Args:
-            cache: Optional cache instance; otherwise create one.
-            validate_input: If True, validate input data structure using attrs.
-                          This demonstrates Boost's preferred validation approach.
-        """
-        self.cache = cache or ExportCache()
-        self.validate_input = validate_input
+    cache: ExportCache = attrs.field(
+        factory=create_default_cache,
+        metadata={"description": "Cache instance for storing export results"},
+    )
+    validate_input: bool = attrs.field(
+        default=False,
+        metadata={
+            "description": "If True, validate input data structure using attrs (Boost's preferred approach)"
+        },
+    )
 
     def export(self, data: list[dict[str, Any]], export_format: ExportFormat) -> str:
         """Export to the requested format with basic validation and caching.
