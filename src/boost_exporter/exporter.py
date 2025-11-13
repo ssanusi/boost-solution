@@ -9,6 +9,7 @@ from typing import Any
 
 from .cache import ExportCache
 from .formats import ExportFormat
+from .models import validate_and_convert_records
 
 
 class DataExporter:
@@ -25,10 +26,22 @@ class DataExporter:
     """
 
     cache: ExportCache
+    validate_input: bool
 
-    def __init__(self, cache: ExportCache | None = None) -> None:
-        """Optionally inject a cache instance; otherwise create one."""
+    def __init__(
+        self,
+        cache: ExportCache | None = None,
+        validate_input: bool = False
+    ) -> None:
+        """Initialize exporter with optional cache and validation.
+
+        Args:
+            cache: Optional cache instance; otherwise create one.
+            validate_input: If True, validate input data structure using attrs.
+                          This demonstrates Boost's preferred validation approach.
+        """
         self.cache = cache or ExportCache()
+        self.validate_input = validate_input
 
     def export(self, data: list[dict[str, Any]], export_format: ExportFormat) -> str:
         """Export to the requested format with basic validation and caching.
@@ -42,8 +55,15 @@ class DataExporter:
 
         Raises:
             ValueError: when data is not a list[dict] or format unsupported.
+            ValueError: when validate_input=True and data structure is invalid.
         """
         self._validate_data(data)
+
+        # Optional validation using attrs (Boost's preferred approach)
+        if self.validate_input:
+            # This validates data structure matches ExportRecord schema
+            # Raises ValueError if structure is invalid
+            validate_and_convert_records(data, strict=False)
 
         # Compute cache key - necessary to check cache, but can be expensive for large datasets
         key = self._compute_cache_key(data, export_format)

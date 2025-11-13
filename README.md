@@ -12,6 +12,7 @@ Data export module implementing:
 - **LRU eviction**: Prevents unbounded memory growth with configurable cache size limit (default: 1000 entries)
 - **Robust error handling**: Validates input data and provides clear error messages
 - **Edge case handling**: Handles empty datasets, missing values, heterogeneous schemas, and datetime objects
+- **Structured data validation** (optional): Uses `attrs` for runtime validation and type safety (Boost's preferred approach)
 
 ## Quick Start
 
@@ -64,6 +65,42 @@ data = [{"id": i, "value": i * 2} for i in range(100)]
 result = exporter.export(data, ExportFormat.JSON)
 ```
 
+### Structured Data Validation (attrs)
+
+The solution includes optional structured data validation using `attrs`, which is commonly used in Boost codebases:
+
+```python
+from boost_exporter import DataExporter, ExportFormat, ExportRecord, validate_and_convert_records
+from datetime import datetime
+
+# Option 1: Use structured ExportRecord models
+records = [
+    ExportRecord(
+        event_type="Receive",
+        location_name="Warehouse",
+        sku_name="Product ABC",
+        quantity=10,
+        value=1000,
+        created_at=datetime.now()
+    )
+]
+
+# Convert to dicts for export
+data = [r.to_dict() for r in records]
+exporter = DataExporter()
+result = exporter.export(data, ExportFormat.JSON)
+
+# Option 2: Enable validation in exporter
+exporter = DataExporter(validate_input=True)
+# This will validate data structure matches ExportRecord schema
+result = exporter.export(data, ExportFormat.JSON)
+
+# Option 3: Use validate_and_convert_records for conversion/validation
+validated_data = validate_and_convert_records(raw_data, strict=False)
+# Or convert to ExportRecord objects
+records = validate_and_convert_records(raw_data, strict=True)
+```
+
 ## Design Notes
 
 ### Export Behavior
@@ -92,6 +129,10 @@ result = exporter.export(data, ExportFormat.JSON)
 - Full type hints throughout using modern Python 3.9+ syntax (`list[dict[str, Any]]`)
 - Input validation ensures data is a list of dictionaries
 - Clear error messages for invalid inputs
+- **Optional structured validation**: Uses `attrs` for runtime validation and data transformation (Boost's preferred approach)
+  - `ExportRecord` class provides immutable, validated data models
+  - `validate_and_convert_records()` function for structured validation/conversion
+  - Can be enabled via `DataExporter(validate_input=True)` for automatic validation
 
 ## Project Layout
 
@@ -101,9 +142,11 @@ boost-solution/
 │   ├── __init__.py
 │   ├── exporter.py         # DataExporter class
 │   ├── cache.py            # ExportCache class
-│   └── formats.py          # ExportFormat enum
+│   ├── formats.py          # ExportFormat enum
+│   └── models.py           # ExportRecord (attrs) and validation utilities
 ├── tests/                  # pytest unit tests
-│   └── test_exporter.py
+│   ├── test_exporter.py
+│   └── test_models.py      # Tests for attrs models
 ├── pyproject.toml          # Project metadata and dependencies
 └── README.md
 ```
@@ -121,6 +164,7 @@ The test suite includes:
 - Large dataset handling (1000+ items)
 - Input validation
 - Cache key stability
+- Structured data validation (attrs models)
 
 Run tests with:
 ```bash
