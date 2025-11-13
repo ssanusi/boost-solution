@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "boost-exporter"
+version = "0.1.0"
+description = "Data export module with multi-format (CSV/JSON) and caching"
+authors = [
+  { name = "Boost Candidate" }
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+# Install with: uv sync --extra dev
+# or: uv add --extra dev pytest
+# Used for local testing only
+dev = [
+  "pytest>=8.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/boost_exporter"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+pythonpath = ["src"]
