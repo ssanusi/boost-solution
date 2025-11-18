@@ -57,8 +57,11 @@ def test_invalid_data_raises() -> None:
 
 
 class InstrumentedCache(ExportCache):
+    """Cache subclass for testing that tracks method calls."""
+
     def __init__(self) -> None:
         super().__init__(ttl_seconds=3600)
+        # These are not attrs fields, just instance variables for testing
         self.get_calls = 0
         self.set_calls = 0
 
