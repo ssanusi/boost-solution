@@ -5,6 +5,8 @@ Data export module implementing:
 - **Option 1**: Multi-format support (CSV and JSON)
 - **Option 2**: Caching support with a 1-hour TTL and LRU eviction
 
+> **Note**: A Redis-backed implementation is available in the [`feature/redis-cache`](https://github.com/ssanusi/boost-solution/tree/feature/redis-cache) branch.
+
 ## Features
 
 - **Multi-format export**: Supports CSV and JSON formats with proper type handling
@@ -23,11 +25,13 @@ Install `uv` (see [uv documentation](https://docs.astral.sh/uv/)).
 ### Setup
 
 1. **Create virtual environment** (optional; uv can also run ephemeral envs):
+
    ```bash
    uv venv
    ```
 
 2. **Install dependencies** (installs project and test deps):
+
    ```bash
    uv sync --extra dev
    ```
@@ -70,6 +74,7 @@ result = exporter.export(data, ExportFormat.JSON)
 The solution includes enhanced structured data validation using `attrs` with advanced features:
 
 **Key attrs Features Implemented:**
+
 - **Automatic Type Conversion**: String inputs are automatically converted to appropriate types
 - **Custom Validators**: Business logic validation (e.g., quantity must be positive, value must be non-negative)
 - **Field Metadata**: Documentation and processing hints stored in field metadata
@@ -117,12 +122,14 @@ records = validate_and_convert_records(raw_data, strict=True)
 ```
 
 **Validation Rules:**
+
 - `event_type`: Must be one of: "Receive", "Ship", "Adjust", "Transfer", "Return"
 - `quantity`: Must be positive (> 0)
 - `value`: Must be non-negative (>= 0)
 - `created_at`: Must be a datetime object or ISO format string
 
 **Advanced Features:**
+
 - **Converters**: Automatically convert string numbers to int/float, string datetimes to datetime objects
 - **Custom Validators**: Enforce business rules (positive quantities, valid event types)
 - **Metadata**: Access field descriptions and units via `attrs.fields(ExportRecord)`
@@ -197,6 +204,7 @@ The test suite includes:
 - Structured data validation (attrs models)
 
 Run tests with:
+
 ```bash
 uv run -m pytest -q
 ```
