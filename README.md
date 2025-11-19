@@ -3,13 +3,12 @@
 Data export module implementing:
 
 - **Option 1**: Multi-format support (CSV and JSON)
-- **Option 2**: Caching support with a 1-hour TTL and LRU eviction
+- **Option 2**: Caching support with a 1-hour TTL (Redis-backed)
 
 ## Features
 
 - **Multi-format export**: Supports CSV and JSON formats with proper type handling
-- **Intelligent caching**: SHA-256 based cache keys with configurable TTL (default: 1 hour)
-- **LRU eviction**: Prevents unbounded memory growth with configurable cache size limit (default: 1000 entries)
+- **Redis Caching**: Uses Redis for distributed caching with configurable TTL (default: 1 hour)
 - **Robust error handling**: Validates input data and provides clear error messages
 - **Edge case handling**: Handles empty datasets, missing values, heterogeneous schemas, and datetime objects
 - **Structured data validation** (optional): Uses `attrs` for runtime validation and type safety (Boost's preferred approach)
@@ -23,19 +22,38 @@ Install `uv` (see [uv documentation](https://docs.astral.sh/uv/)).
 ### Setup
 
 1. **Create virtual environment** (optional; uv can also run ephemeral envs):
+
    ```bash
    uv venv
    ```
 
 2. **Install dependencies** (installs project and test deps):
+
    ```bash
    uv sync --extra dev
    ```
 
-3. **Run tests**:
+3. **Run Redis** (required for caching):
+
+   ```bash
+   docker run -d -p 6379:6379 redis
+   ```
+
+4. **Run tests**:
    ```bash
    uv run -m pytest -q
    ```
+
+### Configuration
+
+The application uses the `REDIS_URL` environment variable to connect to Redis.
+Default: `redis://localhost:6379/0`
+
+Example:
+
+```bash
+export REDIS_URL="redis://redis-host:6379/0"
+```
 
 ### Example Usage
 
@@ -70,6 +88,7 @@ result = exporter.export(data, ExportFormat.JSON)
 The solution includes enhanced structured data validation using `attrs` with advanced features:
 
 **Key attrs Features Implemented:**
+
 - **Automatic Type Conversion**: String inputs are automatically converted to appropriate types
 - **Custom Validators**: Business logic validation (e.g., quantity must be positive, value must be non-negative)
 - **Field Metadata**: Documentation and processing hints stored in field metadata
@@ -117,12 +136,14 @@ records = validate_and_convert_records(raw_data, strict=True)
 ```
 
 **Validation Rules:**
+
 - `event_type`: Must be one of: "Receive", "Ship", "Adjust", "Transfer", "Return"
 - `quantity`: Must be positive (> 0)
 - `value`: Must be non-negative (>= 0)
 - `created_at`: Must be a datetime object or ISO format string
 
 **Advanced Features:**
+
 - **Converters**: Automatically convert string numbers to int/float, string datetimes to datetime objects
 - **Custom Validators**: Enforce business rules (positive quantities, valid event types)
 - **Metadata**: Access field descriptions and units via `attrs.fields(ExportRecord)`
@@ -138,10 +159,10 @@ records = validate_and_convert_records(raw_data, strict=True)
 
 ### Caching
 
-- Cache keys are computed as SHA-256 hashes of a canonical JSON representation of the input data plus the format
-- Export results are cached for 1 hour by default (configurable via `ExportCache(ttl_seconds=...)`)
-- LRU eviction prevents memory issues when cache size limit is reached (default: 1000 entries)
-- Cache keys are stable: same data with different key order produces the same cache key
+- **Redis Backend**: Uses Redis for storage, enabling shared caching across multiple instances.
+- **Cache Keys**: Computed as SHA-256 hashes of a canonical JSON representation of the input data plus the format.
+- **TTL**: Export results are cached for 1 hour by default (configurable via `ExportCache(ttl_seconds=...)`).
+- **Stability**: Cache keys are stable (same data with different key order produces the same cache key).
 
 ### Edge Cases
 
@@ -197,6 +218,7 @@ The test suite includes:
 - Structured data validation (attrs models)
 
 Run tests with:
+
 ```bash
 uv run -m pytest -q
 ```

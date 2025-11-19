@@ -1,10 +1,8 @@
-from __future__ import annotations
-
-import time
-from collections import OrderedDict
+import os
 from typing import Any, Tuple
 
 import attrs
+import redis
 
 
 def validate_positive_int(instance: Any, attribute: attrs.Attribute, value: int) -> None:
@@ -13,19 +11,15 @@ def validate_positive_int(instance: Any, attribute: attrs.Attribute, value: int)
         raise ValueError(f"{attribute.name} must be positive, got {value}")
 
 
-@attrs.define(slots=True, repr=True, eq=False)  # eq=False since cache has mutable state
+@attrs.define(slots=True, repr=True, eq=False)
 class ExportCache:
-    """In-memory cache with a TTL (default: 1 hour) and LRU eviction.
+    """Redis-backed cache with a TTL (default: 1 hour).
 
-    This class uses attrs to eliminate boilerplate while maintaining mutable state
-    for the internal cache store. attrs generates __init__ and __repr__ automatically.
+    This implementation uses Redis for storage, providing persistence and
+    shared caching across multiple instances.
 
-    Stores export results keyed by a hash of the input data and format.
-    Implements LRU eviction when max_size is reached to prevent unbounded memory growth.
-
-    Thread Safety:
-        This implementation is not thread-safe. For multi-threaded environments,
-        external synchronization (e.g., locks) must be used when accessing the cache.
+    Configuration:
+        Uses REDIS_URL environment variable if set, otherwise defaults to localhost.
     """
 
     ttl_seconds: int = attrs.field(
@@ -33,63 +27,40 @@ class ExportCache:
         validator=validate_positive_int,
         metadata={"description": "Time-to-live in seconds"},
     )
-    max_size: int = attrs.field(
-        default=1000,
-        validator=validate_positive_int,
-        metadata={"description": "Maximum number of cache entries before LRU eviction"},
-    )
-    _store: OrderedDict[str, Tuple[float, str]] = attrs.field(
+    _redis: redis.Redis = attrs.field(
         init=False,
-        factory=OrderedDict,
-        metadata={"description": "Internal cache storage"},
+        metadata={"description": "Redis client instance"},
     )
+
+    def __attrs_post_init__(self) -> None:
+        """Initialize Redis connection."""
+        redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        self._redis = redis.from_url(redis_url, decode_responses=True)
 
     def get(self, key: str) -> str | None:
         """Get a cached export if present and not expired.
-
-        Moves the entry to the end (most recently used) if found.
 
         Args:
             key: Cache key.
 
         Returns:
-            Cached value if present and not expired, None otherwise.
+            Cached value if present, None otherwise.
         """
-        entry = self._store.get(key)
-        if not entry:
+        try:
+            return self._redis.get(key)
+        except redis.RedisError:
+            # Fail gracefully if Redis is down
             return None
-
-        ts, value = entry
-        now = time.time()
-        if now - ts > self.ttl_seconds:
-            # expired - remove it
-            self._store.pop(key, None)
-            return None
-
-        # Move to end (most recently used) for LRU
-        self._store.move_to_end(key)
-        return value
 
     def set(self, key: str, data: str) -> None:
-        """Cache an export value with a timestamp for expiration checks.
-
-        Evicts least recently used entry if max_size is reached.
-        Note: This implementation is not thread-safe. For multi-threaded use,
-        external synchronization is required.
+        """Cache an export value with a TTL.
 
         Args:
             key: Cache key.
             data: Value to cache.
         """
-        # If key exists, update it and move to end (most recently used)
-        if key in self._store:
-            self._store.move_to_end(key)
-            self._store[key] = (time.time(), data)
-            return
-
-        # For new keys, evict oldest if we're at capacity before adding
-        if len(self._store) >= self.max_size:
-            self._store.popitem(last=False)  # Remove oldest (first) item
-
-        # Add new entry
-        self._store[key] = (time.time(), data)
+        try:
+            self._redis.set(key, data, ex=self.ttl_seconds)
+        except redis.RedisError:
+            # Fail gracefully if Redis is down
+            pass

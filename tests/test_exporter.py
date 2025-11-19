@@ -111,29 +111,7 @@ def test_cache_expiration() -> None:
     assert out1 == out2  # Same content, but regenerated
 
 
-def test_cache_lru_eviction() -> None:
-    """Test that LRU eviction works when cache size limit is reached."""
-    cache = ExportCache(max_size=3)
-    exp = DataExporter(cache=cache)
 
-    # Fill cache beyond limit
-    data1 = [{"id": 1}]
-    data2 = [{"id": 2}]
-    data3 = [{"id": 3}]
-    data4 = [{"id": 4}]
-
-    exp.export(data1, ExportFormat.JSON)
-    exp.export(data2, ExportFormat.JSON)
-    exp.export(data3, ExportFormat.JSON)
-    exp.export(data4, ExportFormat.JSON)  # Should evict data1
-
-    # data1 should be evicted (oldest)
-    key1 = exp._compute_cache_key(data1, ExportFormat.JSON)
-    assert cache.get(key1) is None
-
-    # data4 should still be cached (newest)
-    key4 = exp._compute_cache_key(data4, ExportFormat.JSON)
-    assert cache.get(key4) is not None
 
 
 def test_unsupported_format_raises() -> None:
