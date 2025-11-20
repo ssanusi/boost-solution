@@ -31,9 +31,9 @@ class DataExporter:
     - Returns text content; callers decide how/where to persist it.
 
     Thread Safety:
-        This class uses ExportCache which is not thread-safe. For multi-threaded
-        use, either provide a thread-safe cache implementation or use external
-        synchronization when sharing a DataExporter instance across threads.
+        This class uses ExportCache which is now thread-safe by default.
+        If a custom cache implementation is provided, it must be thread-safe
+        to ensure safety in multi-threaded environments.
     """
 
     cache: ExportCache = attrs.field(

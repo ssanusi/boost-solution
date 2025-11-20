@@ -12,6 +12,7 @@ Data export module implementing:
 - **Multi-format export**: Supports CSV and JSON formats with proper type handling
 - **Intelligent caching**: SHA-256 based cache keys with configurable TTL (default: 1 hour)
 - **LRU eviction**: Prevents unbounded memory growth with configurable cache size limit (default: 1000 entries)
+- **Thread-safe caching**: Uses `threading.RLock` to ensure safe concurrent access to the cache
 - **Robust error handling**: Validates input data and provides clear error messages
 - **Edge case handling**: Handles empty datasets, missing values, heterogeneous schemas, and datetime objects
 - **Structured data validation** (optional): Uses `attrs` for runtime validation and type safety (Boost's preferred approach)
@@ -149,6 +150,12 @@ records = validate_and_convert_records(raw_data, strict=True)
 - Export results are cached for 1 hour by default (configurable via `ExportCache(ttl_seconds=...)`)
 - LRU eviction prevents memory issues when cache size limit is reached (default: 1000 entries)
 - Cache keys are stable: same data with different key order produces the same cache key
+
+### Thread Safety
+
+- The `ExportCache` implementation is **thread-safe**.
+- It uses a `threading.RLock` (Reentrant Lock) to synchronize access to the underlying `OrderedDict`.
+- This ensures that `get()` and `set()` operations are atomic, making the `DataExporter` safe to share across multiple threads (e.g., in a web server environment).
 
 ### Edge Cases
 

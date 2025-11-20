@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 from collections import OrderedDict
 from typing import Any, Tuple
@@ -24,8 +25,8 @@ class ExportCache:
     Implements LRU eviction when max_size is reached to prevent unbounded memory growth.
 
     Thread Safety:
-        This implementation is not thread-safe. For multi-threaded environments,
-        external synchronization (e.g., locks) must be used when accessing the cache.
+        This implementation IS thread-safe. It uses an RLock to synchronize access
+        to the internal storage.
     """
 
     ttl_seconds: int = attrs.field(
@@ -43,11 +44,17 @@ class ExportCache:
         factory=OrderedDict,
         metadata={"description": "Internal cache storage"},
     )
+    _lock: threading.RLock = attrs.field(
+        init=False,
+        factory=threading.RLock,
+        metadata={"description": "Reentrant lock for thread safety"},
+    )
 
     def get(self, key: str) -> str | None:
         """Get a cached export if present and not expired.
 
         Moves the entry to the end (most recently used) if found.
+        Thread-safe.
 
         Args:
             key: Cache key.
@@ -55,41 +62,42 @@ class ExportCache:
         Returns:
             Cached value if present and not expired, None otherwise.
         """
-        entry = self._store.get(key)
-        if not entry:
-            return None
+        with self._lock:
+            entry = self._store.get(key)
+            if not entry:
+                return None
 
-        ts, value = entry
-        now = time.time()
-        if now - ts > self.ttl_seconds:
-            # expired - remove it
-            self._store.pop(key, None)
-            return None
+            ts, value = entry
+            now = time.time()
+            if now - ts > self.ttl_seconds:
+                # expired - remove it
+                self._store.pop(key, None)
+                return None
 
-        # Move to end (most recently used) for LRU
-        self._store.move_to_end(key)
-        return value
+            # Move to end (most recently used) for LRU
+            self._store.move_to_end(key)
+            return value
 
     def set(self, key: str, data: str) -> None:
         """Cache an export value with a timestamp for expiration checks.
 
         Evicts least recently used entry if max_size is reached.
-        Note: This implementation is not thread-safe. For multi-threaded use,
-        external synchronization is required.
+        Thread-safe.
 
         Args:
             key: Cache key.
             data: Value to cache.
         """
-        # If key exists, update it and move to end (most recently used)
-        if key in self._store:
-            self._store.move_to_end(key)
+        with self._lock:
+            # If key exists, update it and move to end (most recently used)
+            if key in self._store:
+                self._store.move_to_end(key)
+                self._store[key] = (time.time(), data)
+                return
+
+            # For new keys, evict oldest if we're at capacity before adding
+            if len(self._store) >= self.max_size:
+                self._store.popitem(last=False)  # Remove oldest (first) item
+
+            # Add new entry
             self._store[key] = (time.time(), data)
-            return
-
-        # For new keys, evict oldest if we're at capacity before adding
-        if len(self._store) >= self.max_size:
-            self._store.popitem(last=False)  # Remove oldest (first) item
-
-        # Add new entry
-        self._store[key] = (time.time(), data)
